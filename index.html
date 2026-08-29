@@ -617,7 +617,7 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
-  const POSTS_KEY = 'community_posts_v1';
+  const POSTS_PREFIX = 'posts_user_v2_';
   const USERS_KEY = 'community_users_v1';
   const ME_KEY = 'currentUser';
 
@@ -629,6 +629,18 @@
   let editingId = null;
   let profileTarget = null;
   let deleteConfirmId = null;
+
+  function slugify(name){
+    const base = (name||'user')
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]+/g,'_')
+      .replace(/^_+|_+$/g,'');
+    let hash = 0;
+    for(let i=0;i<(name||'').length;i++){ hash = ((hash<<5) - hash + name.charCodeAt(i)) | 0; }
+    return (base || 'user') + '_' + Math.abs(hash).toString(36);
+  }
+  function postsKeyFor(name){ return POSTS_PREFIX + slugify(name); }
 
   function initials(name){
     return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -660,18 +672,26 @@
       return null;
     }
   }
-  async function loadPosts(){
-    const raw = await safeGet(POSTS_KEY, true);
-    try{ allPosts = raw ? JSON.parse(raw) : []; }catch(e){ allPosts = []; }
+  // Cada pessoa tem sua própria chave de posts (posts_user_v2_<slug>),
+  // assim uma comunidade grande com muitas fotos nunca esbarra no limite
+  // de 5MB de uma única chave - o que travaria a publicação de TODO MUNDO.
+  async function loadUserPosts(name){
+    const raw = await safeGet(postsKeyFor(name), true);
+    try{ return raw ? JSON.parse(raw) : []; }catch(e){ return []; }
   }
-  async function savePosts(){
+  async function saveUserPosts(name, posts){
     try{
-      await window.storage.set(POSTS_KEY, JSON.stringify(allPosts), true);
+      await window.storage.set(postsKeyFor(name), JSON.stringify(posts), true);
       return true;
     }catch(e){
-      console.error('Falha ao salvar posts', e);
+      console.error('Falha ao salvar posts de ' + name, e);
       return false;
     }
+  }
+  async function loadPosts(){
+    if(allUsers.length === 0){ allPosts = []; return; }
+    const results = await Promise.all(allUsers.map(u => loadUserPosts(u.name)));
+    allPosts = results.flat();
   }
   async function loadUsers(){
     const raw = await safeGet(USERS_KEY, true);
@@ -737,7 +757,8 @@
     $('#me-avatar').textContent = initials(currentUser);
     setQuoteOfDay();
     setDayBadge();
-    await Promise.all([loadPosts(), loadUsers()]);
+    await loadUsers();
+    await loadPosts();
     renderAll();
     startPolling();
   }
@@ -802,38 +823,65 @@
     });
   });
 
-  // ---------- PHOTO (com marca d'água) ----------
+  // ---------- PHOTO (com marca d'água + compressão progressiva) ----------
+  const MAX_PHOTO_CHARS = 150000; // ~110KB binário por foto, com boa folga do limite de 5MB da chave
+
+  function drawWatermarked(img, targetW){
+    const scale = Math.min(1, targetW / img.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const barH = Math.max(20, canvas.height * 0.07);
+    ctx.fillStyle = 'rgba(23,48,92,0.68)';
+    ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    const fontSize = Math.max(10, Math.round(barH * 0.42));
+    ctx.font = '700 ' + fontSize + 'px Inter, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(WATERMARK_TEXT, 10, canvas.height - barH/2);
+    return canvas;
+  }
+
+  function compressImage(img){
+    let width = 480;
+    let quality = 0.55;
+    let dataUrl = drawWatermarked(img, width).toDataURL('image/jpeg', quality);
+    let attempts = 0;
+    while(dataUrl.length > MAX_PHOTO_CHARS && attempts < 6){
+      if(quality > 0.35){ quality -= 0.1; }
+      else { width = Math.round(width * 0.8); }
+      dataUrl = drawWatermarked(img, width).toDataURL('image/jpeg', quality);
+      attempts++;
+    }
+    return dataUrl;
+  }
+
   $('#photo-input').addEventListener('change', (e)=>{
     const file = e.target.files[0];
     if(!file) return;
+    $('#photo-label').textContent = 'Preparando foto...';
     const reader = new FileReader();
     reader.onload = function(evt){
       const img = new Image();
       img.onload = function(){
-        const maxW = 640;
-        const scale = Math.min(1, maxW / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        // marca d'água no rodapé
-        const barH = Math.max(22, canvas.height * 0.07);
-        ctx.fillStyle = 'rgba(23,48,92,0.68)';
-        ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
-        ctx.fillStyle = 'rgba(255,255,255,0.95)';
-        const fontSize = Math.max(11, Math.round(barH * 0.42));
-        ctx.font = '700 ' + fontSize + 'px Inter, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(WATERMARK_TEXT, 10, canvas.height - barH/2);
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.62);
-        pendingPhoto = dataUrl;
-        $('#photo-preview').src = dataUrl;
-        $('#photo-preview').style.display = 'block';
-        $('#photo-wrap').classList.add('has-photo');
-        $('#photo-label').textContent = 'Foto selecionada — toque para trocar';
+        try{
+          const dataUrl = compressImage(img);
+          pendingPhoto = dataUrl;
+          $('#photo-preview').src = dataUrl;
+          $('#photo-preview').style.display = 'block';
+          $('#photo-wrap').classList.add('has-photo');
+          $('#photo-label').textContent = 'Foto selecionada — toque para trocar';
+        }catch(err){
+          console.error('Falha ao processar foto', err);
+          pendingPhoto = null;
+          $('#photo-wrap').classList.remove('has-photo');
+          $('#photo-label').textContent = 'Não deu para carregar essa foto — tente outra';
+        }
+      };
+      img.onerror = function(){
+        $('#photo-label').textContent = 'Não deu para carregar essa foto — tente outra';
       };
       img.src = evt.target.result;
     };
@@ -904,11 +952,11 @@
     submitBtn.disabled = true;
     submitBtn.textContent = editingId ? 'Salvando...' : 'Publicando...';
 
-    await loadPosts();
+    let myPosts = await loadUserPosts(currentUser);
 
     if(editingId){
-      const post = allPosts.find(p=>p.id === editingId);
-      if(post && post.user === currentUser){
+      const post = myPosts.find(p=>p.id === editingId);
+      if(post){
         post.km = Math.round(km * 100) / 100;
         post.weightKg = weight;
         post.note = note;
@@ -916,7 +964,7 @@
         post.editedAt = Date.now();
       }
     } else {
-      allPosts.push({
+      myPosts.push({
         id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
         user: currentUser,
         dateISO: todayISO(),
@@ -930,19 +978,31 @@
       });
     }
 
-    const ok = await savePosts();
+    let ok = await saveUserPosts(currentUser, myPosts);
+
+    // Se falhar e tinha foto, tenta de novo sem a foto (evita perder o registro do treino)
+    let savedWithoutPhoto = false;
+    if(!ok && pendingPhoto){
+      const retryPosts = myPosts.map(p => (p.photo === pendingPhoto) ? {...p, photo: null} : p);
+      ok = await saveUserPosts(currentUser, retryPosts);
+      if(ok) savedWithoutPhoto = true;
+    }
+
     submitBtn.disabled = false;
 
     if(ok){
       msg.className = 'form-msg ok';
-      msg.textContent = editingId ? 'Registro atualizado!' : 'Treino publicado! Continue firme 💪✝';
+      msg.textContent = savedWithoutPhoto
+        ? 'Treino salvo, mas a foto era grande demais e não coube — tente uma foto mais leve na próxima.'
+        : (editingId ? 'Registro atualizado!' : 'Treino publicado! Continue firme 💪✝');
       msg.style.display = 'block';
       resetForm();
+      await loadPosts();
       renderAll();
     } else {
       submitBtn.textContent = editingId ? 'Salvar alterações' : 'Publicar treino de hoje';
       msg.className = 'form-msg err';
-      msg.textContent = 'Não foi possível salvar agora. Tente novamente.';
+      msg.textContent = 'Não foi possível salvar agora. Verifique sua conexão e tente novamente.';
       msg.style.display = 'block';
     }
   });
@@ -962,10 +1022,12 @@
       return;
     }
     deleteConfirmId = null;
-    await loadPosts();
-    allPosts = allPosts.filter(p=>p.id !== postId);
-    await savePosts();
+    // botão de excluir só aparece nos próprios posts, então mexe só na chave do usuário atual
+    let myPosts = await loadUserPosts(currentUser);
+    myPosts = myPosts.filter(p=>p.id !== postId);
+    await saveUserPosts(currentUser, myPosts);
     if(editingId === postId) resetForm();
+    await loadPosts();
     renderAll();
   }
 
@@ -1157,14 +1219,18 @@
   }
 
   async function toggleLike(postId){
-    await loadPosts();
-    const post = allPosts.find(p=>p.id === postId);
+    // acha o dono do post na lista já carregada, pra saber em qual chave mexer
+    const ownerHint = allPosts.find(p=>p.id === postId);
+    if(!ownerHint) return;
+    const ownerPosts = await loadUserPosts(ownerHint.user);
+    const post = ownerPosts.find(p=>p.id === postId);
     if(!post) return;
     post.likes = post.likes || [];
     const idx = post.likes.indexOf(currentUser);
     if(idx === -1) post.likes.push(currentUser);
     else post.likes.splice(idx,1);
-    await savePosts();
+    await saveUserPosts(ownerHint.user, ownerPosts);
+    await loadPosts();
     renderAll();
   }
 
@@ -1174,12 +1240,15 @@
     if(!input) return;
     const text = input.value.trim();
     if(!text) return;
-    await loadPosts();
-    const post = allPosts.find(p=>p.id === postId);
+    const ownerHint = allPosts.find(p=>p.id === postId);
+    if(!ownerHint) return;
+    const ownerPosts = await loadUserPosts(ownerHint.user);
+    const post = ownerPosts.find(p=>p.id === postId);
     if(!post) return;
     post.comments = post.comments || [];
     post.comments.push({user: currentUser, text: text.slice(0,200), ts: Date.now()});
-    await savePosts();
+    await saveUserPosts(ownerHint.user, ownerPosts);
+    await loadPosts();
     renderAll();
   }
 
@@ -1260,7 +1329,8 @@
       const activeEl = document.activeElement;
       const isTyping = activeEl && (activeEl.tagName === 'TEXTAREA' || (activeEl.tagName === 'INPUT' && activeEl.type === 'text'));
       if(isTyping) return;
-      await Promise.all([loadPosts(), loadUsers()]);
+      await loadUsers();
+      await loadPosts();
       renderAll();
     }, 20000);
   }
