@@ -379,6 +379,72 @@
   }
   .empty-feed{text-align:center;color:var(--muted);font-size:13px;padding:30px 10px;}
 
+  /* mural estilo instagram */
+  .insta-grid{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:4px;
+  }
+  .insta-grid .empty-feed{grid-column:1 / -1;}
+  .insta-tile{
+    position:relative;
+    aspect-ratio:1/1;
+    border-radius:8px;
+    overflow:hidden;
+    cursor:pointer;
+    background:linear-gradient(135deg, var(--navy), var(--orange));
+    border:1px solid var(--line);
+  }
+  .insta-tile img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s ease;}
+  .insta-tile:hover img{transform:scale(1.04);}
+  .insta-tile .no-photo{
+    width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    color:#ffffff;text-align:center;padding:6px;
+  }
+  .insta-tile .no-photo .np-avatar{
+    width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.18);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;
+  }
+  .insta-tile .no-photo .np-km{font-family:'Anton';font-size:15px;}
+  .insta-tile .tile-overlay{
+    position:absolute;left:0;right:0;bottom:0;
+    background:linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
+    padding:16px 7px 6px;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    color:#fff;font-size:10.5px;font-weight:700;
+  }
+  .insta-tile .tile-name{
+    max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .insta-tile .tile-likes{display:flex;align-items:center;gap:3px;}
+  .insta-tile .tile-mine{
+    position:absolute;top:6px;right:6px;
+    background:rgba(0,0,0,0.55);color:#fff;font-size:9.5px;font-weight:700;
+    padding:2px 6px;border-radius:999px;
+  }
+
+  /* modal de post */
+  .modal-overlay{
+    display:none;position:fixed;inset:0;z-index:100;
+    background:rgba(0,0,0,0.78);
+    align-items:center;justify-content:center;
+    padding:16px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-content{
+    width:100%;max-width:460px;max-height:88vh;overflow-y:auto;
+    background:linear-gradient(180deg, var(--card), var(--card-2));
+    border:1px solid var(--line);border-radius:18px;padding:16px;
+    position:relative;
+  }
+  .modal-close{
+    position:sticky;top:0;left:100%;
+    width:30px;height:30px;border-radius:50%;
+    background:rgba(0,0,0,0.4);color:#fff;border:none;
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;cursor:pointer;margin-bottom:-30px;z-index:2;
+  }
+
   /* profile view */
   .back-btn{
     display:inline-flex;align-items:center;gap:6px;
@@ -544,9 +610,9 @@
           <div class="card">
             <div class="feed-header">
               <h2 style="margin:0;">Tábuas de Moisés</h2>
-              <span class="muted-note">visível para todos que entram no desafio</span>
+              <span class="muted-note">quem já bateu o treino — toque numa foto</span>
             </div>
-            <div id="feed" style="margin-top:14px;">
+            <div id="feed" class="insta-grid" style="margin-top:14px;">
               <div class="empty-feed">Nenhum treino publicado ainda. Registre o seu ao lado ⬅</div>
             </div>
           </div>
@@ -582,6 +648,11 @@
       </div>
     </div>
   </main>
+
+  <!-- MODAL DE POST (estilo Instagram) -->
+  <div class="modal-overlay" id="post-modal">
+    <div class="modal-content" id="post-modal-content"></div>
+  </div>
 </div>
 
 <script>
@@ -1264,11 +1335,33 @@
       btn.addEventListener('click', ()=> deletePost(btn.dataset.id));
     });
     container.querySelectorAll('.avatar[data-user], .who[data-user]').forEach(el=>{
-      el.addEventListener('click', ()=> showProfile(el.dataset.user));
+      el.addEventListener('click', ()=>{
+        closeModal();
+        showProfile(el.dataset.user);
+      });
     });
   }
 
-  // ---------- RENDER: FEED ----------
+  // ---------- RENDER: MURAL (grade estilo Instagram) ----------
+  function tileHtml(p){
+    const likeCount = (p.likes||[]).length;
+    const mine = p.user === currentUser;
+    const inner = p.photo
+      ? `<img src="${p.photo}" alt="Treino de ${escapeHtml(p.user)}">`
+      : `<div class="no-photo">
+          <div class="np-avatar">${initials(p.user)}</div>
+          <div class="np-km">${fmt(p.km,1)} km</div>
+        </div>`;
+    return `<div class="insta-tile" data-id="${p.id}">
+      ${mine ? '<span class="tile-mine">você</span>' : ''}
+      ${inner}
+      <div class="tile-overlay">
+        <span class="tile-name">${escapeHtml(p.user)}</span>
+        <span class="tile-likes">❤️ ${likeCount}</span>
+      </div>
+    </div>`;
+  }
+
   function renderFeed(){
     const feed = $('#feed');
     if(allPosts.length === 0){
@@ -1276,8 +1369,44 @@
       return;
     }
     const sorted = [...allPosts].sort((a,b)=> b.createdAt - a.createdAt);
-    feed.innerHTML = sorted.map(postCardHtml).join('');
-    bindPostCardEvents(feed);
+    feed.innerHTML = sorted.map(tileHtml).join('');
+    feed.querySelectorAll('.insta-tile').forEach(tile=>{
+      tile.addEventListener('click', ()=> openPostModal(tile.dataset.id));
+    });
+  }
+
+  let openModalPostId = null;
+
+  function openPostModal(postId){
+    const post = allPosts.find(p=>p.id === postId);
+    if(!post) return;
+    openModalPostId = postId;
+    const modal = $('#post-modal');
+    const content = $('#post-modal-content');
+    content.innerHTML = '<button class="modal-close" id="modal-close-btn">✕</button>' + postCardHtml(post);
+    bindPostCardEvents(content);
+    $('#modal-close-btn').addEventListener('click', closeModal);
+    modal.classList.add('open');
+  }
+
+  function closeModal(){
+    openModalPostId = null;
+    $('#post-modal').classList.remove('open');
+    $('#post-modal-content').innerHTML = '';
+  }
+
+  $('#post-modal').addEventListener('click', (e)=>{
+    if(e.target.id === 'post-modal') closeModal();
+  });
+
+  function refreshOpenModal(){
+    if(!openModalPostId) return;
+    const post = allPosts.find(p=>p.id === openModalPostId);
+    if(!post){ closeModal(); return; }
+    const content = $('#post-modal-content');
+    content.innerHTML = '<button class="modal-close" id="modal-close-btn">✕</button>' + postCardHtml(post);
+    bindPostCardEvents(content);
+    $('#modal-close-btn').addEventListener('click', closeModal);
   }
 
   async function toggleLike(postId){
@@ -1297,8 +1426,7 @@
   }
 
   async function sendComment(postId){
-    const activeContainer = $('#view-profile').style.display === 'none' ? $('#feed') : $('#profile-feed');
-    const input = activeContainer.querySelector(`.comment-input[data-id="${postId}"]`);
+    const input = document.querySelector(`.comment-input[data-id="${postId}"]`);
     if(!input) return;
     const text = input.value.trim();
     if(!text) return;
@@ -1381,6 +1509,7 @@
     renderPending();
     renderFeed();
     if(profileTarget) renderProfile();
+    refreshOpenModal();
   }
 
   // ---------- POLLING (para ver atualizações da tribo) ----------
