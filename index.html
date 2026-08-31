@@ -354,6 +354,9 @@
   .pill.weight{background:rgba(126,200,234,0.18);border-color:rgba(126,200,234,0.5);color:#bfe4f7;}
   .post-note{font-size:13.5px;color:var(--cream);margin:6px 0 2px;line-height:1.45;}
   .post-photo{width:100%;border-radius:10px;margin-top:8px;display:block;}
+  .photo-slot{min-height:160px;border-radius:10px;overflow:hidden;background:linear-gradient(100deg, rgba(233,241,248,0.04) 30%, rgba(233,241,248,0.10) 50%, rgba(233,241,248,0.04) 70%);background-size:200% 100%;animation:shimmer 1.4s infinite;}
+  .tile-photo-slot{width:100%;height:100%;background:linear-gradient(100deg, rgba(233,241,248,0.05) 30%, rgba(233,241,248,0.14) 50%, rgba(233,241,248,0.05) 70%);background-size:200% 100%;animation:shimmer 1.4s infinite;}
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
   .post-actions{display:flex;gap:14px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);align-items:center;}
   .action-btn{
     background:none;border:none;color:var(--muted);font-size:12.5px;
@@ -750,7 +753,23 @@
   // de 5MB de uma única chave - o que travaria a publicação de TODO MUNDO.
   async function loadUserPosts(name){
     const raw = await safeGet(postsKeyFor(name), true);
-    try{ return raw ? JSON.parse(raw) : []; }catch(e){ return []; }
+    let posts = [];
+    try{ posts = raw ? JSON.parse(raw) : []; }catch(e){ posts = []; }
+
+    // autocorreção: posts salvos num formato antigo (foto embutida no próprio
+    // registro) inchavam o array até estourar o limite de 5MB, travando
+    // qualquer publicação nova. Ao detectar isso, move a foto pra sua própria
+    // chave e salva o array já enxuto de volta.
+    const legacyPhotoPosts = posts.filter(p => p.photo);
+    if(legacyPhotoPosts.length > 0){
+      for(const p of legacyPhotoPosts){
+        await savePhoto(p.id, p.photo);
+        p.hasPhoto = true;
+        delete p.photo;
+      }
+      await saveUserPosts(name, posts);
+    }
+    return posts;
   }
   async function saveUserPosts(name, posts){
     try{
@@ -761,6 +780,34 @@
       return false;
     }
   }
+
+  // As fotos NÃO ficam dentro do array de posts (que precisa caber inteiro numa
+  // chave) - cada foto mora sozinha na sua própria chave. Assim o histórico de
+  // uma pessoa bem ativa (treino + foto todo dia, 40 dias) nunca esbarra no
+  // limite de 5MB - cada chave carrega no máximo 1 foto.
+  const photoCache = new Map(); // postId -> dataURL | null
+  function photoKeyFor(postId){ return 'photo_v1_' + postId; }
+  async function getPhoto(postId){
+    if(photoCache.has(postId)) return photoCache.get(postId);
+    const raw = await safeGet(photoKeyFor(postId), true);
+    photoCache.set(postId, raw || null);
+    return raw || null;
+  }
+  async function savePhoto(postId, dataUrl){
+    try{
+      await window.storage.set(photoKeyFor(postId), dataUrl, true);
+      photoCache.set(postId, dataUrl);
+      return true;
+    }catch(e){
+      console.error('Falha ao salvar foto', e);
+      return false;
+    }
+  }
+  async function deletePhotoKey(postId){
+    try{ await window.storage.delete(photoKeyFor(postId), true); }catch(e){ /* segue mesmo se falhar */ }
+    photoCache.delete(postId);
+  }
+
   async function loadPosts(){
     if(allUsers.length === 0){ allPosts = []; return; }
     const results = await Promise.all(allUsers.map(u => loadUserPosts(u.name)));
@@ -1037,7 +1084,7 @@
     $('#entry-msg').style.display = 'none';
   }
 
-  function startEdit(postId){
+  async function startEdit(postId){
     const post = allPosts.find(p=>p.id === postId);
     if(!post || post.user !== currentUser) return;
     editingId = postId;
@@ -1046,12 +1093,23 @@
     $$('.unit-toggle button').forEach(b=>b.classList.toggle('active', b.dataset.unit === 'km'));
     $('#weight-input').value = post.weightKg != null ? post.weightKg : '';
     $('#note-input').value = post.note || '';
-    if(post.photo){
-      pendingPhoto = post.photo;
-      $('#photo-preview').src = post.photo;
+    if(post.hasPhoto){
+      pendingPhoto = 'KEEP'; // marca que a foto existente deve ser mantida, a não ser que o usuário troque
       $('#photo-preview').style.display = 'block';
+      $('#photo-preview').src = '';
       $('#photo-wrap').classList.add('has-photo');
-      $('#photo-label').textContent = 'Foto atual — toque para trocar';
+      $('#photo-label').textContent = 'Carregando foto atual...';
+      getPhoto(postId).then(dataUrl=>{
+        if(editingId !== postId) return; // usuário já saiu da edição
+        if(dataUrl){
+          $('#photo-preview').src = dataUrl;
+          $('#photo-label').textContent = 'Foto atual — toque para trocar';
+        } else {
+          $('#photo-label').textContent = 'Toque para adicionar uma foto';
+          $('#photo-wrap').classList.remove('has-photo');
+          $('#photo-preview').style.display = 'none';
+        }
+      });
     } else {
       pendingPhoto = null;
       $('#photo-preview').style.display = 'none';
@@ -1086,25 +1144,31 @@
     submitBtn.textContent = editingId ? 'Salvando...' : 'Publicando...';
 
     let myPosts = await loadUserPosts(currentUser);
+    const targetId = editingId || ('p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
+    const existingPost = editingId ? myPosts.find(p=>p.id === editingId) : null;
 
-    if(editingId){
-      const post = myPosts.find(p=>p.id === editingId);
-      if(post){
-        post.km = Math.round(km * 100) / 100;
-        post.weightKg = weight;
-        post.note = note;
-        post.photo = pendingPhoto;
-        post.editedAt = Date.now();
-      }
+    // decide o que fazer com a foto: manter a atual, trocar por uma nova, remover, ou nunca teve
+    let photoAction;
+    if(pendingPhoto === 'KEEP') photoAction = 'keep';
+    else if(pendingPhoto) photoAction = 'save';
+    else photoAction = (existingPost && existingPost.hasPhoto) ? 'delete' : 'none';
+    const willHavePhoto = (photoAction === 'save' || photoAction === 'keep');
+
+    if(existingPost){
+      existingPost.km = Math.round(km * 100) / 100;
+      existingPost.weightKg = weight;
+      existingPost.note = note;
+      existingPost.hasPhoto = willHavePhoto;
+      existingPost.editedAt = Date.now();
     } else {
       myPosts.push({
-        id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        id: targetId,
         user: currentUser,
         dateISO: todayISO(),
         km: Math.round(km * 100) / 100,
         weightKg: weight,
         note: note,
-        photo: pendingPhoto,
+        hasPhoto: willHavePhoto,
         likes: [],
         comments: [],
         createdAt: Date.now()
@@ -1112,21 +1176,27 @@
     }
 
     let ok = await saveUserPosts(currentUser, myPosts);
+    let photoWarning = false;
 
-    // Se falhar e tinha foto, tenta de novo sem a foto (evita perder o registro do treino)
-    let savedWithoutPhoto = false;
-    if(!ok && pendingPhoto){
-      const retryPosts = myPosts.map(p => (p.photo === pendingPhoto) ? {...p, photo: null} : p);
-      ok = await saveUserPosts(currentUser, retryPosts);
-      if(ok) savedWithoutPhoto = true;
+    if(ok && photoAction === 'save'){
+      const photoOk = await savePhoto(targetId, pendingPhoto);
+      if(!photoOk){
+        // a ficha do treino já foi salva - só a foto não coube. Marca sem foto e avisa.
+        photoWarning = true;
+        const post = myPosts.find(p=>p.id === targetId);
+        if(post) post.hasPhoto = false;
+        await saveUserPosts(currentUser, myPosts);
+      }
+    } else if(ok && photoAction === 'delete'){
+      await deletePhotoKey(targetId);
     }
 
     submitBtn.disabled = false;
 
     if(ok){
       msg.className = 'form-msg ok';
-      msg.textContent = savedWithoutPhoto
-        ? 'Treino salvo, mas a foto era grande demais e não coube — tente uma foto mais leve na próxima.'
+      msg.textContent = photoWarning
+        ? 'Treino salvo, mas a foto não coube — tente uma foto mais leve na próxima.'
         : (editingId ? 'Registro atualizado!' : 'Treino publicado! Continue firme 💪✝');
       msg.style.display = 'block';
       resetForm();
@@ -1159,6 +1229,7 @@
     let myPosts = await loadUserPosts(currentUser);
     myPosts = myPosts.filter(p=>p.id !== postId);
     await saveUserPosts(currentUser, myPosts);
+    await deletePhotoKey(postId);
     if(editingId === postId) resetForm();
     await loadPosts();
     renderAll();
@@ -1290,7 +1361,7 @@
         ${p.weightKg ? `<span class="pill weight">⚖️ ${fmt(p.weightKg,1)} kg</span>` : ''}
       </div>
       ${p.note ? `<div class="post-note">${escapeHtml(p.note)}</div>` : ''}
-      ${p.photo ? `<img class="post-photo" src="${p.photo}" alt="Foto do treino de ${escapeHtml(p.user)}">` : ''}
+      ${p.hasPhoto ? `<div class="post-photo photo-slot" data-photo-id="${p.id}"><div class="photo-loading"></div></div>` : ''}
       <div class="post-actions">
         <button class="action-btn like-btn ${liked?'liked':''}" data-id="${p.id}">
           ${liked ? '❤️' : '🤍'} <span>${likeCount}</span>
@@ -1340,14 +1411,29 @@
         showProfile(el.dataset.user);
       });
     });
+    loadPhotosInto(container);
+  }
+
+  function loadPhotosInto(container){
+    container.querySelectorAll('.photo-slot').forEach(slot=>{
+      const id = slot.dataset.photoId;
+      getPhoto(id).then(dataUrl=>{
+        if(!slot.isConnected) return; // o card pode ter sido substituído nesse meio tempo
+        if(dataUrl){
+          slot.innerHTML = `<img src="${dataUrl}" alt="Foto do treino" style="width:100%;border-radius:10px;display:block;">`;
+        } else {
+          slot.remove();
+        }
+      });
+    });
   }
 
   // ---------- RENDER: MURAL (grade estilo Instagram) ----------
   function tileHtml(p){
     const likeCount = (p.likes||[]).length;
     const mine = p.user === currentUser;
-    const inner = p.photo
-      ? `<img src="${p.photo}" alt="Treino de ${escapeHtml(p.user)}">`
+    const inner = p.hasPhoto
+      ? `<div class="tile-photo-slot" data-photo-id="${p.id}"></div>`
       : `<div class="no-photo">
           <div class="np-avatar">${initials(p.user)}</div>
           <div class="np-km">${fmt(p.km,1)} km</div>
@@ -1362,6 +1448,20 @@
     </div>`;
   }
 
+  function loadTilePhotos(container){
+    container.querySelectorAll('.tile-photo-slot').forEach(slot=>{
+      const id = slot.dataset.photoId;
+      getPhoto(id).then(dataUrl=>{
+        if(!slot.isConnected) return;
+        if(dataUrl){
+          slot.outerHTML = `<img src="${dataUrl}" alt="Foto do treino">`;
+        } else {
+          slot.outerHTML = `<div class="no-photo"><div class="np-avatar">·</div></div>`;
+        }
+      });
+    });
+  }
+
   function renderFeed(){
     const feed = $('#feed');
     if(allPosts.length === 0){
@@ -1373,6 +1473,7 @@
     feed.querySelectorAll('.insta-tile').forEach(tile=>{
       tile.addEventListener('click', ()=> openPostModal(tile.dataset.id));
     });
+    loadTilePhotos(feed);
   }
 
   let openModalPostId = null;
