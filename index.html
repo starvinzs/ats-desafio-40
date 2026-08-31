@@ -412,6 +412,8 @@
     <h1>Desafio 40</h1>
     <div class="sub">100km em 40 dias · Ele Vive — corra ou caminhe onde estiver, no seu tempo.</div>
     <input id="login-name" type="text" placeholder="Seu nome" maxlength="30" autocomplete="off">
+    <input id="login-pass" type="password" placeholder="Senha (mín. 4 caracteres)" maxlength="60" autocomplete="off">
+    <div style="font-size:11.5px;color:var(--muted);text-align:left;margin:-4px 0 12px;line-height:1.4;">Primeiro acesso? essa senha vai proteger seu nome. Já tem conta? use a mesma senha de sempre.</div>
     <button class="btn-primary" id="login-btn">Entrar no desafio</button>
     <div class="form-msg err" id="login-msg" style="display:none;"></div>
     <div class="login-meta">
@@ -708,6 +710,20 @@
   }
 
   // ---------- LOGIN ----------
+  async function hashPassword(name, password){
+    try{
+      const enc = new TextEncoder();
+      const data = enc.encode(slugify(name) + '::' + password);
+      const buf = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }catch(e){
+      let h = 0;
+      const s = slugify(name) + '::' + password;
+      for(let i=0;i<s.length;i++){ h = ((h<<5) - h + s.charCodeAt(i)) | 0; }
+      return 'fb_' + Math.abs(h).toString(36);
+    }
+  }
+
   async function tryAutoLogin(){
     const name = await safeGet(ME_KEY, false);
     if(name){
@@ -717,12 +733,15 @@
   }
 
   $('#login-btn').addEventListener('click', doLogin);
-  $('#login-name').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+  $('#login-name').addEventListener('keydown', (e)=>{ if(e.key==='Enter') $('#login-pass').focus(); });
+  $('#login-pass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
 
   async function doLogin(){
-    const input = $('#login-name');
-    const name = input.value.trim();
+    const name = $('#login-name').value.trim();
+    const password = $('#login-pass').value;
     const msg = $('#login-msg');
+    msg.style.display = 'none';
+
     if(!name){
       msg.textContent = 'Digite seu nome para entrar no desafio.';
       msg.style.display = 'block';
@@ -733,21 +752,63 @@
       msg.style.display = 'block';
       return;
     }
-    msg.style.display = 'none';
+    if(!password || password.length < 4){
+      msg.textContent = 'Digite uma senha com pelo menos 4 caracteres.';
+      msg.style.display = 'block';
+      return;
+    }
+
     $('#login-btn').disabled = true;
     $('#login-btn').textContent = 'Entrando...';
 
-    currentUser = name;
+    await loadUsers();
+    const existing = allUsers.find(u => u.name.toLowerCase() === name.toLowerCase());
+    const hash = await hashPassword(existing ? existing.name : name, password);
+
+    if(existing){
+      if(!existing.passHash){
+        // pessoa já cadastrada antes da senha existir: cadastra agora com o que ela digitou
+        existing.passHash = hash;
+        await saveUsers();
+      } else if(existing.passHash !== hash){
+        $('#login-btn').disabled = false;
+        $('#login-btn').textContent = 'Entrar no desafio';
+        msg.textContent = 'Senha incorreta para esse nome. Tente de novo.';
+        msg.style.display = 'block';
+        return;
+      }
+      currentUser = existing.name;
+    } else {
+      allUsers.push({name: name, joinedAt: Date.now(), passHash: hash});
+      await saveUsers();
+      currentUser = name;
+    }
+
     try{
-      await window.storage.set(ME_KEY, name, false);
+      await window.storage.set(ME_KEY, currentUser, false);
     }catch(e){ /* segue mesmo se falhar, sessão fica só nesta aba */ }
 
-    await loadUsers();
-    if(!allUsers.find(u => u.name.toLowerCase() === name.toLowerCase())){
-      allUsers.push({name: name, joinedAt: Date.now()});
-      await saveUsers();
-    }
     await enterApp();
+  }
+
+  // Migra posts do formato antigo (uma única chave global 'community_posts_v1',
+  // usada antes da arquitetura por-usuário) para a chave de cada dono.
+  async function migrateLegacyPosts(){
+    const raw = await safeGet('community_posts_v1', true);
+    if(!raw) return;
+    let legacy = [];
+    try{ legacy = JSON.parse(raw); }catch(e){ return; }
+    if(!Array.isArray(legacy) || legacy.length === 0) return;
+    const byUser = {};
+    legacy.forEach(p=>{ (byUser[p.user] = byUser[p.user] || []).push(p); });
+    for(const uname of Object.keys(byUser)){
+      const existing = await loadUserPosts(uname);
+      const existingIds = new Set(existing.map(p=>p.id));
+      const toAdd = byUser[uname].filter(p=>!existingIds.has(p.id));
+      if(toAdd.length > 0){
+        await saveUserPosts(uname, existing.concat(toAdd));
+      }
+    }
   }
 
   async function enterApp(){
@@ -758,6 +819,7 @@
     setQuoteOfDay();
     setDayBadge();
     await loadUsers();
+    await migrateLegacyPosts();
     await loadPosts();
     renderAll();
     startPolling();
