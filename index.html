@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>ATS Desafio 40 Dias</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "tertiary": "#c5c7c8", "surface-bright": "#38393c", "error-container": "#93000a",
+          "on-tertiary-container": "#828485", "outline-variant": "#44474e", "on-tertiary-fixed-variant": "#454748",
+          "on-primary": "#193053", "outline": "#8e9099", "tertiary-fixed-dim": "#c5c7c8",
+          "surface-container-highest": "#343537", "secondary-container": "#025797", "on-error": "#690005",
+          "surface-tint": "#b1c7f2", "secondary-fixed": "#d2e4ff", "tertiary-fixed": "#e1e3e4",
+          "primary-fixed-dim": "#b1c7f2", "on-error-container": "#ffdad6", "on-primary-fixed": "#001b3d",
+          "error": "#ffb4ab", "inverse-primary": "#495f84", "on-secondary-fixed-variant": "#004880",
+          "on-surface-variant": "#c4c6cf", "on-secondary-fixed": "#001c37", "surface-container-low": "#1b1b1e",
+          "surface-container": "#1f1f22", "tertiary-container": "#191c1d", "on-secondary": "#00325a",
+          "on-primary-fixed-variant": "#31476b", "primary-fixed": "#d6e3ff", "on-background": "#e3e2e5",
+          "primary": "#b1c7f2", "secondary-fixed-dim": "#a1c9ff", "on-secondary-container": "#a7ccff",
+          "on-tertiary-fixed": "#191c1d", "inverse-on-surface": "#303033", "secondary": "#a1c9ff",
+          "surface-variant": "#343537", "on-surface": "#e3e2e5", "inverse-surface": "#e3e2e5",
+          "primary-container": "#001b3d", "background": "#121316", "surface": "#121316",
+          "surface-dim": "#121316", "surface-container-lowest": "#0d0e11", "surface-container-high": "#292a2d",
+          "on-primary-container": "#6f84ac", "on-tertiary": "#2e3132", "background-deep": "#001b3d"
+        },
+        borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+        spacing: { "2xl": "48px", lg: "24px", md: "16px", "margin-mobile": "16px", "margin-desktop": "40px", xl: "32px", sm: "8px", xs: "4px", "3xl": "64px", gutter: "20px", base: "4px" },
+        fontFamily: {
+          "body-lg": ["Anybody"], "label-md": ["Anybody"], "headline-lg-mobile": ["Anybody"], "body-md": ["Anybody"],
+          "display-lg": ["Anybody"], "title-md": ["Anybody"], "label-sm": ["Anybody"], "headline-lg": ["Anybody"]
+        },
+        fontSize: {
+          "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
+          "label-md": ["14px", { lineHeight: "20px", letterSpacing: "0.05em", fontWeight: "600" }],
+          "headline-lg-mobile": ["24px", { lineHeight: "32px", fontWeight: "700" }],
+          "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+          "display-lg": ["56px", { lineHeight: "64px", letterSpacing: "-0.02em", fontWeight: "800" }],
+          "title-md": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+          "label-sm": ["12px", { lineHeight: "16px", fontWeight: "500" }],
+          "headline-lg": ["32px", { lineHeight: "40px", fontWeight: "700" }]
+        }
+      }
+    }
+  };
+</script>
+<style>
+  body { background-color: #121316; color: #e3e2e5; -webkit-font-smoothing: antialiased; }
+  .bg-scanline { background-image: linear-gradient(to bottom, rgba(255,255,255,0) 50%, rgba(0,0,0,0.25) 50%); background-size: 100% 4px; }
+  .scanline-bg { background-image: linear-gradient(transparent 50%, rgba(255,255,255,0.02) 50%); background-size: 100% 4px; }
+  .inner-glow { box-shadow: inset 0 0 0 1px rgba(177,199,242,0.15); }
+  .glow-accent { filter: drop-shadow(0 0 15px rgba(214,227,255,0.4)); }
+  .glow-active { box-shadow: 0 0 20px 0px rgba(177,199,242,0.15), inset 0 0 0 1px rgba(177,199,242,0.5); }
+  .glass-panel { background-color: rgba(18,18,18,0.4); backdrop-filter: blur(20px); border: 1px solid #343537; }
+  .journey-gradient { background: linear-gradient(90deg, #c5c7c8 0%, #b1c7f2 100%); }
+  .active-ring { box-shadow: 0 0 0 2px #b1c7f2, 0 0 20px rgba(177,199,242,0.15); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+  @keyframes subtlePulse { 0%,100% { opacity:1; transform:scale(1);} 50% { opacity:0.9; transform:scale(0.98);} }
+  .animate-subtle-pulse { animation: subtlePulse 3s infinite ease-in-out; }
+  .fade-in { animation: fadeIn 0.6s ease-out forwards; opacity: 0; }
+  .fade-in-up { animation: fadeInUp 0.6s ease-out forwards; opacity: 0; transform: translateY(10px); }
+  .delay-100 { animation-delay: 100ms; } .delay-200 { animation-delay: 200ms; }
+  @keyframes fadeIn { to { opacity: 1; } }
+  @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+  .view { display: none; }
+  .view.active { display: block; }
+  .nav-link.active-tab { background-color: #025797; color: #a7ccff; border-radius: 9999px; padding-left: 1rem; padding-right: 1rem; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ===================== VIEW: LANÇAMENTO ===================== -->
+<section id="view-lancamento" class="view active">
+  <div class="bg-background-deep text-on-background min-h-screen flex flex-col font-body-md overflow-hidden relative">
+    <div class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[800px] h-full bg-[radial-gradient(ellipse_at_top,#025797_0%,transparent_70%)] opacity-30"></div>
+      <div class="absolute bottom-0 left-0 w-full h-1/2 bg-[radial-gradient(ellipse_at_bottom,#0d0e11_0%,transparent_100%)] opacity-80"></div>
+      <div class="absolute inset-0 bg-scanline pointer-events-none mix-blend-overlay"></div>
+    </div>
+    <main class="relative z-10 flex-1 flex flex-col items-center justify-center px-margin-mobile w-full max-w-[1100px] mx-auto min-h-screen pb-3xl md:pb-0">
+      <div class="flex flex-col items-center w-full max-w-sm md:max-w-md gap-xl fade-in-up">
+        <div class="relative group w-48 h-48 md:w-56 md:h-56 mb-lg">
+          <div class="absolute inset-0 rounded-full border border-primary/20 scale-110 animate-[spin_10s_linear_infinite]"></div>
+          <div class="absolute inset-0 rounded-full border-t border-primary/40 scale-125 animate-[spin_15s_linear_infinite_reverse]"></div>
+          <div class="relative w-full h-full rounded-2xl overflow-hidden inner-glow bg-surface-container-highest/30 backdrop-blur-md flex items-center justify-center glow-accent p-sm transition-transform duration-500 group-hover:scale-105">
+            <img alt="ATS Desafio 40 Dias Logo" class="w-full h-full object-cover rounded-xl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpKAB5gE6QnhbBVrEW0CP1oK9VKMQh-NOFxoul3gxolHS6HmPC0cTXCckcI7mRJMrgvgkR_plEMzZIfoRuYNnzAX_QwnXzJKHMIugPSdBBaN-Vw9Kb-UUUcQIRSnnqiCE4qbmX-XocXBy0pgayNpYbSpacNtxgW9rCXsB5l1GBUUdMvExcycm405AyE-Xbe4LpPTZ2DPUwfJiapK6UtsYhvak9WBQ49Lyg0vaLlOcZynuCC3S1I-LBMibV6fG6l8f-E4Q">
+          </div>
+        </div>
+        <div class="text-center space-y-md">
+          <div class="inline-flex items-center gap-2 bg-surface-container/50 px-4 py-1.5 rounded-full border border-outline-variant/30 inner-glow backdrop-blur-sm">
+            <span class="material-symbols-outlined text-primary text-[16px]">bolt</span>
+            <span class="font-label-md text-label-md text-primary tracking-[0.2em] uppercase">High Performance Protocol</span>
+          </div>
+          <h1 class="font-display-lg md:text-display-lg text-on-surface tracking-tighter uppercase drop-shadow-[0_0_20px_rgba(214,227,255,0.2)] text-headline-lg-mobile">Supere <br>Seus Limites <br><span class="text-primary">Em 40 Dias</span></h1>
+          <p class="font-body-md text-body-md text-on-surface-variant max-w-[300px] mx-auto md:max-w-none md:px-lg">Tudo posso naquele que me fortalece.<br><span class="text-label-sm opacity-60">(Filipenses 4:13)</span></p>
+        </div>
+        <div class="w-full mt-xl" id="cta-inicial">
+          <button onclick="mostrarAuth('cadastro')" class="w-full relative group overflow-hidden bg-primary text-on-primary font-headline-lg-mobile text-headline-lg-mobile rounded-full py-lg px-2xl flex items-center justify-center gap-sm transition-transform duration-200 active:scale-95 shadow-[0_0_30px_rgba(214,227,255,0.15)] animate-subtle-pulse">
+            <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity duration-300 z-10"></div>
+            <span class="relative z-20">COMEÇAR DESAFIO</span>
+            <span class="material-symbols-outlined relative z-20 font-bold transition-transform duration-300 group-hover:translate-x-2">arrow_forward</span>
+          </button>
+          <button onclick="mostrarAuth('login')" class="w-full mt-sm text-center text-on-surface-variant hover:text-primary font-label-md text-label-md uppercase tracking-widest transition-colors py-sm">
+            Já tenho conta — Entrar
+          </button>
+        </div>
+
+        <!-- Formulário de Login/Cadastro -->
+        <div id="auth-box" class="hidden w-full glass-panel rounded-xl p-lg flex flex-col gap-md">
+          <div class="flex items-center justify-between">
+            <h2 class="font-title-md text-title-md text-on-background" id="auth-titulo">Criar Conta</h2>
+            <button onclick="fecharAuth()" class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">close</span></button>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-label-sm text-label-sm text-on-surface-variant uppercase">Nome de Atleta</label>
+            <input id="auth-username" type="text" placeholder="Ex: joao_runner" class="w-full h-12 bg-surface-dim rounded border border-surface-container-high px-3 text-on-surface focus:border-primary focus:ring-0" autocomplete="username">
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-label-sm text-label-sm text-on-surface-variant uppercase">Senha</label>
+            <input id="auth-senha" type="password" placeholder="Mínimo 6 caracteres" class="w-full h-12 bg-surface-dim rounded border border-surface-container-high px-3 text-on-surface focus:border-primary focus:ring-0" autocomplete="current-password">
+          </div>
+          <button onclick="enviarAuth()" id="auth-botao" class="w-full h-12 bg-primary text-on-primary font-title-md text-title-md rounded flex items-center justify-center gap-2 hover:bg-secondary transition-colors active:scale-[0.98]">
+            Criar Conta
+          </button>
+          <button onclick="alternarAuthModo()" class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm text-center" id="auth-alternar">
+            Já tenho conta — Entrar
+          </button>
+          <p class="text-label-sm text-center" id="auth-feedback"></p>
+        </div>
+
+        <div class="flex items-center gap-lg mt-md opacity-60">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">timer</span>
+            <span class="font-label-sm text-label-sm uppercase tracking-widest" id="horas-restantes">960 Horas Restantes</span>
+          </div>
+          <div class="h-1 w-1 bg-primary rounded-full"></div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">monitoring</span>
+            <span class="font-label-sm text-label-sm uppercase tracking-widest">v1.1.0 Online</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ===================== APP SHELL (telas logadas) ===================== -->
+<div id="app-shell" class="hidden">
+  <header class="fixed top-0 w-full z-50 bg-surface border-b border-outline-variant flex justify-between items-center px-margin-mobile h-16">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full overflow-hidden bg-white border border-outline-variant shrink-0">
+        <img alt="ATS Logo" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdytbfC_EDk-h2CTWFU_zK4ZEZJDzuN6TdSviDP4htDcYFtJhzEW45Pj4S8Vy0YkzZCbesDpGJHW5Z7sP7znkbsToqohrczdm-cG42qVf2MHik_QDg59ixnzQx-UBvb67xcCC2aTQ7xD2XW7Jg2lkuxeWTVcYDWtV5ty27lB6ywYDJUIwRnOjlCZ1eInI2-mUUznNNKVGeqEsY8PLaL3hGtjqoo9pFxWoC5wqwkoEE5SpuzUREWjKRFinQ7soe_mq71r8">
+      </div>
+      <h1 class="font-title-md text-title-md font-extrabold text-primary tracking-tight">ATS Desafio 40 dias</h1>
+    </div>
+    <div class="flex items-center gap-1">
+      <button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100">
+        <span class="material-symbols-outlined">notifications</span>
+      </button>
+      <button onclick="sair()" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-100" title="Sair">
+        <span class="material-symbols-outlined">logout</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ---- VIEW: DASHBOARD (Desafio) ---- -->
+  <section id="view-desafio" class="view">
+    <main class="flex-1 w-full flex flex-col px-margin-mobile pt-24 pb-28 max-w-[600px] mx-auto gap-xl">
+      <section class="flex flex-col items-center text-center px-4 fade-in">
+        <span class="material-symbols-outlined text-outline-variant opacity-50 mb-2">format_quote</span>
+        <p class="font-body-lg text-body-lg text-on-surface-variant italic max-w-sm">"A disciplina é a ponte entre metas e realizações. Cada quilômetro conta na jornada de 40 dias."</p>
+      </section>
+      <section class="flex flex-col items-center justify-center relative w-full pt-sm fade-in-up delay-100">
+        <div class="flex flex-col items-center mb-md">
+          <div class="flex items-baseline gap-2">
+            <span class="font-display-lg text-display-lg text-primary tracking-tighter drop-shadow-[0_0_15px_rgba(177,199,242,0.3)]" id="dash-km">45.5</span>
+            <span class="font-label-md text-label-md text-on-surface-variant uppercase">KM</span>
+          </div>
+          <div class="bg-secondary-container/20 border border-secondary-container/50 rounded flex items-center px-3 py-1 mt-2">
+            <span class="font-label-md text-label-md text-secondary-fixed uppercase tracking-widest text-[12px]">Meta 100km</span>
+          </div>
+        </div>
+        <div class="w-full max-w-md relative h-3 bg-surface-container-high rounded-full overflow-hidden shadow-inner border border-black/50">
+          <div class="absolute top-0 left-0 h-full journey-gradient rounded-full relative" id="dash-bar" style="width:45.5%">
+            <div class="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full blur-[4px] opacity-80"></div>
+          </div>
+        </div>
+        <div class="mt-4 flex items-center gap-1.5 text-on-surface-variant/80">
+          <span class="material-symbols-outlined text-[16px]">flag</span>
+          <span class="font-label-md text-label-md text-[12px] uppercase" id="dash-faltam">Faltam 54.5km</span>
+        </div>
+      </section>
+      <section class="w-full max-w-md mx-auto flex flex-col gap-xs fade-in-up delay-200">
+        <h2 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest px-2 mb-2 text-[12px]">Registro Diário</h2>
+        <div class="bg-surface-container/40 backdrop-blur-sm border border-outline-variant/30 rounded-xl p-5 flex flex-col gap-md scanline-bg relative overflow-hidden focus-within:glow-active transition-all duration-300">
+          <div class="grid grid-cols-2 gap-gutter">
+            <div class="flex flex-col gap-1">
+              <label class="font-label-md text-label-md text-[12px] text-on-surface-variant uppercase" for="distanceInput">Distância Hoje</label>
+              <div class="relative flex items-center h-12 bg-surface-dim rounded border border-surface-container-high focus-within:border-primary-container transition-colors">
+                <input class="w-full bg-transparent border-none text-right font-title-md text-title-md text-on-surface placeholder:text-surface-variant focus:ring-0 pr-10 h-full" id="distanceInput" placeholder="0.00" step="0.01" type="number">
+                <span class="absolute right-3 font-label-md text-label-md text-[12px] text-on-surface-variant/50 uppercase pointer-events-none">KM</span>
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="font-label-md text-label-md text-[12px] text-on-surface-variant uppercase" for="weightInput">Peso Atual</label>
+              <div class="relative flex items-center h-12 bg-surface-dim rounded border border-surface-container-high focus-within:border-primary-container transition-colors">
+                <input class="w-full bg-transparent border-none text-right font-title-md text-title-md text-on-surface placeholder:text-surface-variant focus:ring-0 pr-10 h-full" id="weightInput" placeholder="0.0" step="0.1" type="number">
+                <span class="absolute right-3 font-label-md text-label-md text-[12px] text-on-surface-variant/50 uppercase pointer-events-none">KG</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="postarTreino()" class="w-full h-14 bg-primary text-on-primary font-title-md text-title-md rounded flex items-center justify-center gap-2 hover:bg-secondary transition-colors active:scale-[0.98] mt-2 relative overflow-hidden group/btn">
+            <span class="material-symbols-outlined text-[24px]">photo_camera</span>
+            <span>Postar Treino</span>
+            <div class="absolute inset-0 bg-white opacity-0 group-hover/btn:opacity-20 transition-opacity"></div>
+          </button>
+          <p class="text-label-sm text-on-surface-variant/60 text-center" id="dash-feedback"></p>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <!-- ---- VIEW: PERFIL ---- -->
+  <section id="view-perfil" class="view">
+    <main class="pt-24 px-margin-mobile md:px-margin-desktop max-w-[1100px] mx-auto grid grid-cols-4 md:grid-cols-12 gap-gutter pb-28">
+      <section class="col-span-4 md:col-span-12 flex flex-col md:flex-row items-center md:items-start gap-md mb-xl">
+        <div class="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden border-2 border-primary relative group active-ring shrink-0">
+          <img alt="Profile Picture" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGUIZQ0R9BdgQSfrZjZvFhehAq8IyJK4fVvN5cr6K_jzqF1-9p9oK2nryQCEOX4swEUOEvmQcPi4hYhae3iRiaYgqXOqVmeYsiFOIqE_cJ0VJ2BbaN_VQWvQAnzrPyeZmnQa-UwtwLpsKO3Gg2GDKcq83r1BU3H5GfwOmyVGnfXJOGtdCUbQb5LbymmMVj0Hdh_HnDP0POeHYzzgAjYJTRLVIWVGCYW6VcfRWDS0O0FxsDRRz7GOzBhg">
+        </div>
+        <div class="text-center md:text-left flex-1 flex flex-col justify-center">
+          <h1 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background mb-base" id="perfil-nome">ATLETA</h1>
+          <p class="font-body-md text-body-md text-on-surface-variant mb-sm" id="perfil-nivel">Nível: Desafiante</p>
+          <div class="glass-panel p-sm rounded-lg inline-flex items-center gap-md mt-md self-center md:self-start">
+            <div>
+              <span class="font-label-sm text-label-sm text-on-surface-variant uppercase block">Total Percorrido</span>
+              <span class="font-display-lg text-[28px] text-primary" id="perfil-total">45.5<span class="text-[14px] opacity-60">KM</span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="col-span-4 md:col-span-12 mb-xl">
+        <div class="flex justify-between items-center mb-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Progresso do Desafio (100km)</span>
+          <span class="font-title-md text-title-md text-primary" id="perfil-pct">46%</span>
+        </div>
+        <div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+          <div class="h-full journey-gradient rounded-full" id="perfil-bar" style="width:46%"></div>
+        </div>
+      </section>
+      <section class="col-span-4 md:col-span-12 grid grid-cols-2 md:grid-cols-4 gap-md mb-xl">
+        <div class="glass-panel p-md rounded-xl flex flex-col justify-between">
+          <div class="flex items-center gap-base mb-md">
+            <span class="material-symbols-outlined text-secondary">monitor_weight</span>
+            <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Peso Corporal</span>
+          </div>
+          <div class="flex justify-between items-end">
+            <div>
+              <span class="font-label-sm text-label-sm text-on-surface-variant/50 block mb-base">Atual</span>
+              <div class="flex items-baseline gap-base"><span class="font-title-md text-title-md text-on-background" id="perfil-peso">78.5</span><span class="font-label-sm text-label-sm text-on-surface-variant/50">KG</span></div>
+            </div>
+            <div class="text-right">
+              <span class="font-label-sm text-label-sm text-on-surface-variant/50 block mb-base">Inicial</span>
+              <div class="flex items-baseline gap-base justify-end"><span class="font-title-md text-title-md text-on-surface-variant">82.0</span><span class="font-label-sm text-label-sm text-on-surface-variant/50">KG</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="glass-panel p-md rounded-xl flex flex-col justify-between">
+          <div class="flex items-center gap-base mb-md">
+            <span class="material-symbols-outlined text-secondary">calendar_today</span>
+            <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Dias Ativos</span>
+          </div>
+          <div><div class="flex items-baseline gap-base"><span class="font-display-lg text-[40px] font-extrabold text-on-background">28</span><span class="font-title-md text-title-md text-on-surface-variant/50">/40</span></div>
+          <p class="font-body-md text-body-md text-on-surface-variant mt-base">Sequência atual: 12 dias</p></div>
+        </div>
+        <div class="glass-panel p-md rounded-xl col-span-2 flex justify-between items-center">
+          <div class="flex items-center gap-md">
+            <div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center">
+              <span class="material-symbols-outlined text-on-background">speed</span>
+            </div>
+            <div><span class="font-label-sm text-label-sm text-on-surface-variant uppercase block mb-base">Pace Médio</span>
+            <div class="flex items-baseline gap-base"><span class="font-title-md text-title-md text-on-background">5:42</span><span class="font-label-sm text-label-sm text-on-surface-variant/50">/KM</span></div></div>
+          </div>
+        </div>
+      </section>
+      <section class="col-span-4 mb-xl flex flex-col">
+        <h2 class="font-title-md text-title-md text-on-background mb-md">Conquistas</h2>
+        <div class="glass-panel p-md rounded-xl flex-1">
+          <div class="flex flex-wrap gap-sm">
+            <div class="bg-secondary-container text-on-secondary-container px-sm py-base rounded-full flex items-center gap-base border border-secondary/20">
+              <span class="material-symbols-outlined text-[16px]">local_fire_department</span><span class="font-label-sm text-label-sm uppercase">7 Dias Focados</span></div>
+            <div class="bg-secondary-container text-on-secondary-container px-sm py-base rounded-full flex items-center gap-base border border-secondary/20">
+              <span class="material-symbols-outlined text-[16px]">route</span><span class="font-label-sm text-label-sm uppercase">50 KM Alcançados</span></div>
+            <div class="bg-surface-container text-on-surface-variant px-sm py-base rounded-full flex items-center gap-base border border-outline-variant/30 opacity-50">
+              <span class="material-symbols-outlined text-[16px]">mountain_flag</span><span class="font-label-sm text-label-sm uppercase">Metade do Caminho</span></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <!-- ---- VIEW: RANKING ---- -->
+  <section id="view-ranking" class="view">
+    <main class="pt-24 px-margin-mobile max-w-4xl mx-auto flex flex-col gap-xl pb-28">
+      <section class="fade-in">
+        <h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Ranking Geral - 40 Dias</h2>
+        <div class="flex items-center gap-2 mt-xs">
+          <span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-low px-2 py-1 rounded">100KM CHALLENGE</span>
+          <span class="font-label-sm text-label-sm text-primary">DIA 12/40</span>
+        </div>
+      </section>
+      <section class="grid grid-cols-3 gap-sm fade-in-up delay-100">
+        <div class="flex flex-col items-center justify-end bg-surface-container-low border border-outline-variant/30 rounded-xl p-3 relative overflow-hidden mt-8">
+          <div class="absolute top-2 left-2 font-title-md text-title-md text-on-surface-variant opacity-50">2</div>
+          <div class="w-12 h-12 rounded-full overflow-hidden border-2 border-outline-variant mb-2 z-10"><img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzf3ue9oLWZ6o90UwB9OoioQUtKF7Kd6gVO7sqw6Z1fUAZO9gxRxKqnS8OEW7gGEg2sb3DUcVJhUT_8SCtuboDPvvmFGAzwEbkIAX4ITLMlRBBMisotvvvp4N-MfU1se3bYrRdhZoTiXL5tKN3h8vYGaujnNhPq3czBY9OCOgfkyujDC_m9lbM6sxd79RGlopPnxfexlQ7NxDhHvwJ7J6yqUxARd2pH_miq9ZlMwR6lHY5bab2LGtaYg"></div>
+          <h3 class="font-body-md text-body-md text-on-surface text-center truncate w-full">Sarah O.</h3>
+          <div class="font-title-md text-title-md text-primary mt-1">88.1<span class="text-[12px] opacity-50 ml-1">KM</span></div>
+          <div class="w-full h-1 bg-surface-variant mt-2 rounded-full overflow-hidden"><div class="h-full journey-gradient w-[88%]"></div></div>
+        </div>
+        <div class="flex flex-col items-center justify-end bg-surface-container border-2 border-primary rounded-xl p-4 relative overflow-hidden glow-active transform -translate-y-4">
+          <div class="absolute top-2 left-2 font-title-md text-title-md text-primary font-bold">1</div>
+          <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary mb-3 z-10 shadow-[0_0_15px_rgba(177,199,242,0.3)]"><img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbMvd8qB4UwjlqIYiFFvRt7WFRuAneh8O7fZ7wg-O4LLvZNDigxh4qTCCa3lJRTK7pFcE6yebTMVQrlsQ2tZkQaluV0t2xHUtDSaXVHgyzIanChv_pbAHOnoibs3yxQSoIg_t36g8oSkqOpZgZHfZFQJpJ6GpiBeYvhZEe1Z2ZBJSmPSWUXhkpzPAcoSpLTKzjiV7tnq_1qv3Cpadkf8d3Rya4uWeBK7se5W9f38PUd-LgpamzBZARUA"></div>
+          <h3 class="font-title-md text-title-md text-on-surface text-center truncate w-full">Marcus T.</h3>
+          <div class="font-display-lg text-[28px] text-primary mt-1 leading-none">92.5<span class="text-[14px] opacity-50 ml-1 font-label-sm">KM</span></div>
+          <div class="w-full h-2 bg-surface-variant mt-3 rounded-full overflow-hidden"><div class="h-full journey-gradient w-[92.5%]"></div></div>
+        </div>
+        <div class="flex flex-col items-center justify-end bg-surface-container-low border border-outline-variant/30 rounded-xl p-3 relative overflow-hidden mt-10">
+          <div class="absolute top-2 left-2 font-title-md text-title-md text-on-surface-variant opacity-50">3</div>
+          <div class="w-12 h-12 rounded-full overflow-hidden border-2 border-outline-variant mb-2 z-10"><img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaxxfjtbK2H5rCbfUjsZ_l5gIKctEFX0xH7PziOcDZ4_IpRVmuZ22FxowOPO1rVh0MyuHiHw0ByrNO37-mTi6rleOkA7lfCJZpPj_bQXv5e0Ky9bIWqvdv7uWQNLXeU1v-WtozVMjpyX_afUmBlztfZjrilRG0chm5enzGJzziE3J7vh62maVfUzSotU6XYoLs6OlI0zPL8CT7XqSkdLT7BF_uwd2zmrSxru5cqIk7b40OG09tzL7V1A"></div>
+          <h3 class="font-body-md text-body-md text-on-surface text-center truncate w-full">Elena R.</h3>
+          <div class="font-title-md text-title-md text-primary mt-1">85.0<span class="text-[12px] opacity-50 ml-1">KM</span></div>
+          <div class="w-full h-1 bg-surface-variant mt-2 rounded-full overflow-hidden"><div class="h-full journey-gradient w-[85%]"></div></div>
+        </div>
+      </section>
+      <section class="flex flex-col gap-2 fade-in-up delay-200">
+        <div class="flex items-center bg-surface-container-low border border-outline-variant/20 rounded-lg p-3">
+          <div class="w-8 font-title-md text-[16px] text-on-surface-variant text-right pr-3">4</div>
+          <div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant mr-3 shrink-0"><img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDCwz5a4AjcU2TAso7c_JWPPX_OAtLg55yA18jcjR9yUIKxYVvrfOl-E208ZdjybwBRpn0uV5TcZQBdnPbNyrXAwtozCshTVlmdUMdiKpnlcXqPUNq6uJz6uiyDrxUURzTv7hcNEug64PtiG32x5mnChq8NvvdeFFODJYhbvAsSAvHQ1J5FfPCYcaSrxmcuDo3oj2_om-1EU4kyomAGEP9dqmw62aXoHrJRZiJsdTFKpX1HRKPBE7JegA"></div>
+          <div class="flex-1 min-w-0"><h4 class="font-body-md text-body-md text-on-surface truncate">David K.</h4>
+          <div class="w-full max-w-[120px] h-1 bg-surface-variant mt-1 rounded-full overflow-hidden"><div class="h-full journey-gradient w-[76%] opacity-70"></div></div></div>
+          <div class="font-title-md text-title-md text-on-surface text-right">76.2<span class="font-label-sm text-[10px] text-on-surface-variant ml-1">KM</span></div>
+        </div>
+        <div class="flex items-center bg-surface-container-low border border-outline-variant/20 rounded-lg p-3">
+          <div class="w-8 font-title-md text-[16px] text-on-surface-variant text-right pr-3">5</div>
+          <div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant mr-3 shrink-0"><img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAR22NxX5EO5Vo8jpEacsMQPbvRKSzyu7XtHtcSTMCm-M1-C7APVgT3p-ERgiX3dtOld_acyIBEAkokoQMLP2h-FgypoY4hgQHQy6L8cj0C5LGtHOGQAfJQDHgfakATTOXKnGo6yhiSmZNkJ96lN9dVoMCGLDpQFA4D3GhESUqJOePcjzDCHciRq6h1Qxy5sGeyEW81NE6V06PmW7Uhh5gIOMr1yv9_RlPsGm258dVWVoao_g_LZjHGyg"></div>
+          <div class="flex-1 min-w-0"><h4 class="font-body-md text-body-md text-on-surface truncate">Laura B.</h4>
+          <div class="w-full max-w-[120px] h-1 bg-surface-variant mt-1 rounded-full overflow-hidden"><div class="h-full journey-gradient w-[71%] opacity-70"></div></div></div>
+          <div class="font-title-md text-title-md text-on-surface text-right">71.8<span class="font-label-sm text-[10px] text-on-surface-variant ml-1">KM</span></div>
+        </div>
+        <div class="flex items-center bg-surface-container-low border border-primary/40 rounded-lg p-3">
+          <div class="w-8 font-title-md text-[16px] text-on-surface-variant text-right pr-3">6</div>
+          <div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant mr-3 shrink-0"><img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACvVmgK6N7pNmwabjHS2Ir3aqSy1gnzEu07zuAO4jCb-ldK5Fw4Eq5xa03TpPGynLHzvo-7AoMusqri0fd9tKsD8dqJzLy-QuApaXHoZ4QnLABThGoWVo2dKuOjCgluSE6tw0OEm_h-KCMhb1VDlEutjjCGuNMFquGfTibEZBRcmuNf7zber7IZgNSC01DlxPg-ush_RgKxv2TyxxKOYMlGl1SVtoqTcYDUb-kRA8AHFGHa9XR89no7Q"></div>
+          <div class="flex-1 min-w-0"><h4 class="font-body-md text-body-md text-on-surface truncate">Você</h4>
+          <div class="w-full max-w-[120px] h-1 bg-surface-variant mt-1 rounded-full overflow-hidden"><div class="h-full journey-gradient" id="ranking-voce-bar" style="width:45.5%; opacity:0.9"></div></div></div>
+          <div class="font-title-md text-title-md text-primary text-right"><span id="ranking-voce-km">45.5</span><span class="font-label-sm text-[10px] text-on-surface-variant ml-1">KM</span></div>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <!-- ---- VIEW: MURAL (Tábua de Moisés) ---- -->
+  <section id="view-mural" class="view">
+    <main class="pt-24 px-margin-mobile max-w-[700px] mx-auto pb-28">
+      <div class="mb-lg flex flex-col gap-md md:flex-row md:items-center md:justify-between">
+        <div class="relative flex-1 md:max-w-md">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60">search</span>
+          <input class="w-full bg-surface-container-low border border-outline-variant/50 rounded-lg pl-10 pr-4 py-2 text-body-md font-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-on-surface-variant/40" placeholder="Buscar no mural..." type="text">
+        </div>
+        <div class="flex gap-2 bg-surface-container p-1 rounded-lg self-start">
+          <button class="px-4 py-1.5 rounded bg-surface-bright text-primary font-label-md text-label-md shadow-sm">RECENTES</button>
+          <button class="px-4 py-1.5 rounded text-on-surface-variant font-label-md text-label-md hover:text-on-surface transition-colors">DESTAQUES</button>
+        </div>
+      </div>
+      <div class="flex flex-col gap-lg pb-lg" id="mural-feed"></div>
+    </main>
+  </section>
+
+  <!-- ---- BOTTOM NAV ---- -->
+  <nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 pb-safe px-2 bg-surface-container border-t border-outline-variant rounded-t-xl">
+    <a class="nav-link flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 px-4 py-1" href="#desafio" data-view="desafio">
+      <span class="material-symbols-outlined text-[24px]">dashboard</span><span class="font-label-sm text-label-sm mt-1">Desafio</span>
+    </a>
+    <a class="nav-link flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 px-4 py-1" href="#perfil" data-view="perfil">
+      <span class="material-symbols-outlined text-[24px]">person</span><span class="font-label-sm text-label-sm mt-1">Perfil</span>
+    </a>
+    <a class="nav-link flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 px-4 py-1" href="#ranking" data-view="ranking">
+      <span class="material-symbols-outlined text-[24px]">leaderboard</span><span class="font-label-sm text-label-sm mt-1">Ranking</span>
+    </a>
+    <a class="nav-link flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-150 px-4 py-1" href="#mural" data-view="mural">
+      <span class="material-symbols-outlined text-[24px]">forum</span><span class="font-label-sm text-label-sm mt-1">Tábua de Moisés</span>
+    </a>
+  </nav>
+</div>
+
+<script>
+  // ---------- Conexão Supabase ----------
+  var SUPABASE_URL = "https://oipazxkyotfmncyknkco.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_oh-rIvBoFRutcX-gmbmcCg_QJWs4S4e";
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  var authModo = "cadastro";
+  var meuPerfil = null;
+  var META_KM = 100;
+  var FOTO_PADRAO = "https://lh3.googleusercontent.com/aida-public/AB6AXuDGKm6l2-0EBIHl6HUoBaMtw56kyznERxUug9XZiQvvuM_2fEKIk-K0CgCCs8hOJca5tUKyW8nCfmTMuFOHa-ENbWw5N0ll0TYEvQ5ns5hQI2ZL72OSgq42w0B9JSyGzeD8tx3oqgbiCGLqsSvBasc0yzUJzC_t6WOzD17QSgtfOsqqClUyz1MeiICVlIakmIO4ZIethMwwASpEvyipLjO0K5opZ5U0UCAV2L7Hws5VKVRF7NaQkVS0vg";
+  var AVATAR_PADRAO = "https://lh3.googleusercontent.com/aida-public/AB6AXuBLYppQa52MPesDGrz1eJ_w2YhhhpizynEwuXZhRO1fzBGNis4D4s3X4lTvlpeWZFQcUzWZpEJzM4Ru8AljEyKPainMLtc8ikkKFW7fkELCVfp5cDHYsPSxWtGFnTV9ialrFoshSkWMEaeow1csV8-8oPJ9br2dMK7mn9pcTPkOPSnkvOSAv1F04rZCchfHOjVlskJ8HQhgfsFo1z_ZXQjZ68a1zdelJaTIMSVyLCy46yA_s4JZkyJFAdWXqskR6oEK5kA";
+
+  function mostrarAuth(modo) {
+    authModo = modo;
+    document.getElementById("cta-inicial").classList.add("hidden");
+    document.getElementById("auth-box").classList.remove("hidden");
+    atualizarTextoAuth();
+  }
+  function fecharAuth() {
+    document.getElementById("auth-box").classList.add("hidden");
+    document.getElementById("cta-inicial").classList.remove("hidden");
+    document.getElementById("auth-feedback").textContent = "";
+  }
+  function alternarAuthModo() {
+    authModo = authModo === "cadastro" ? "login" : "cadastro";
+    atualizarTextoAuth();
+  }
+  function atualizarTextoAuth() {
+    var cadastro = authModo === "cadastro";
+    document.getElementById("auth-titulo").textContent = cadastro ? "Criar Conta" : "Entrar";
+    document.getElementById("auth-botao").textContent = cadastro ? "Criar Conta" : "Entrar";
+    document.getElementById("auth-alternar").textContent = cadastro ? "Já tenho conta — Entrar" : "Não tenho conta — Criar";
+  }
+  function emailInterno(username) {
+    return username.toLowerCase().replace(/[^a-z0-9_]/g, "") + "@atsdesafio40.app";
+  }
+
+  async function enviarAuth() {
+    var username = document.getElementById("auth-username").value.trim();
+    var senha = document.getElementById("auth-senha").value;
+    var feedback = document.getElementById("auth-feedback");
+    feedback.textContent = "";
+    if (!username) { feedback.textContent = "Escolha um nome de atleta."; return; }
+    if (!senha) { feedback.textContent = "Digite uma senha."; return; }
+    var email = emailInterno(username);
+
+    if (authModo === "cadastro") {
+      var r = await sb.auth.signUp({ email: email, password: senha, options: { data: { username: username } } });
+      if (r.error) {
+        feedback.textContent = r.error.message.indexOf("already registered") !== -1
+          ? "Esse nome de atleta já está em uso."
+          : r.error.message;
+        return;
+      }
+      if (!r.data.session) {
+        feedback.textContent = "Conta criada! Tente entrar.";
+        authModo = "login";
+        atualizarTextoAuth();
+        return;
+      }
+    } else {
+      var r2 = await sb.auth.signInWithPassword({ email: email, password: senha });
+      if (r2.error) {
+        feedback.textContent = "Nome de atleta ou senha incorretos.";
+        return;
+      }
+    }
+    await entrarNoApp();
+  }
+  async function sair() {
+    await sb.auth.signOut();
+    meuPerfil = null;
+    window.location.hash = "";
+    document.getElementById("app-shell").classList.add("hidden");
+    fecharAuth();
+  }
+
+  async function entrarNoApp() {
+    var userRes = await sb.auth.getUser();
+    var user = userRes.data.user;
+    if (!user) return;
+    var perfilRes = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    if (!perfilRes.data) {
+      var novo = await sb.from("profiles").insert({ id: user.id, username: (user.user_metadata && user.user_metadata.username) || user.email.split("@")[0] }).select().single();
+      meuPerfil = novo.data;
+    } else {
+      meuPerfil = perfilRes.data;
+    }
+    document.getElementById("auth-box").classList.add("hidden");
+    window.location.hash = "desafio";
+    await carregarTudo();
+  }
+
+  async function carregarTudo() {
+    if (!meuPerfil) return;
+    await Promise.all([carregarStats(), carregarFeed(), carregarRanking()]);
+  }
+
+  async function carregarStats() {
+    var soma = await sb.from("registros").select("distancia_km").eq("user_id", meuPerfil.id);
+    var kmTotal = (soma.data || []).reduce(function (acc, r) { return acc + Number(r.distancia_km); }, 0);
+    var pct = Math.min(100, (kmTotal / META_KM) * 100);
+    var faltam = Math.max(0, META_KM - kmTotal).toFixed(1);
+
+    document.getElementById("dash-km").textContent = kmTotal.toFixed(1);
+    document.getElementById("dash-bar").style.width = pct + "%";
+    document.getElementById("dash-faltam").textContent = "Faltam " + faltam + "km";
+    document.getElementById("perfil-total").innerHTML = kmTotal.toFixed(1) + '<span class="text-[14px] opacity-60">KM</span>';
+    document.getElementById("perfil-pct").textContent = Math.round(pct) + "%";
+    document.getElementById("perfil-bar").style.width = pct + "%";
+    document.getElementById("perfil-peso").textContent = (meuPerfil.peso_atual != null ? Number(meuPerfil.peso_atual).toFixed(1) : "—");
+    document.getElementById("perfil-nome").textContent = (meuPerfil.username || "ATLETA").toUpperCase();
+    document.getElementById("perfil-nivel").textContent = "Nível: " + (meuPerfil.nivel || "Desafiante");
+  }
+
+  async function carregarFeed() {
+    var res = await sb.from("posts").select("*, profiles(username, avatar_url), curtidas(user_id), comentarios(id)").order("criado_em", { ascending: false }).limit(30);
+    var feed = document.getElementById("mural-feed");
+    feed.innerHTML = "";
+    (res.data || []).forEach(function (p) {
+      var jaCurti = (p.curtidas || []).some(function (c) { return c.user_id === meuPerfil.id; });
+      var nomeAutor = (p.profiles && p.profiles.username) || "Atleta";
+      var fotoAutor = (p.profiles && p.profiles.avatar_url) || AVATAR_PADRAO;
+      var art = document.createElement("article");
+      art.className = "bg-surface-container-low border border-outline-variant/30 rounded-xl overflow-hidden flex flex-col";
+      art.innerHTML =
+        '<div class="p-gutter flex items-center justify-between">' +
+          '<div class="flex items-center gap-md">' +
+            '<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant"><img class="w-full h-full object-cover" src="' + fotoAutor + '"></div>' +
+            '<div><p class="font-title-md text-title-md text-on-surface">' + nomeAutor + '</p><p class="font-label-md text-label-md text-on-surface-variant">' + new Date(p.criado_em).toLocaleString("pt-BR") + '</p></div>' +
+          '</div></div>' +
+        '<div class="relative aspect-[4/5] md:aspect-[16/9] w-full bg-surface-dim">' +
+          '<img class="w-full h-full object-cover" src="' + (p.foto_url || FOTO_PADRAO) + '">' +
+          '<div class="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent"></div>' +
+          '<div class="absolute bottom-gutter left-gutter">' +
+            (p.tag ? '<div class="bg-secondary/10 backdrop-blur-md border border-secondary/20 rounded px-3 py-1 mb-2 inline-block"><span class="font-label-md text-label-md text-secondary-fixed">' + p.tag + '</span></div>' : '') +
+            '<h2 class="font-display-lg text-display-lg text-primary drop-shadow-md">+' + Number(p.distancia_km).toFixed(1) + ' KM</h2>' +
+            '<p class="font-body-lg text-body-lg text-on-surface/90">' + (p.legenda || "") + '</p>' +
+          '</div></div>' +
+        '<div class="p-gutter flex items-center justify-between border-t border-outline-variant/20">' +
+          '<div class="flex items-center gap-lg">' +
+            '<button onclick="curtir(\'' + p.id + '\', ' + jaCurti + ')" class="flex items-center gap-xs ' + (jaCurti ? "text-primary" : "text-on-surface-variant") + ' hover:opacity-80 transition-opacity"><span class="material-symbols-outlined">favorite</span><span class="font-title-md text-title-md">' + (p.curtidas || []).length + '</span></button>' +
+            '<button class="flex items-center gap-xs text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined">mode_comment</span><span class="font-title-md text-title-md">' + (p.comentarios || []).length + '</span></button>' +
+          '</div><button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined">share</span></button>' +
+        '</div>';
+      feed.appendChild(art);
+    });
+  }
+
+  async function curtir(postId, jaCurti) {
+    if (jaCurti) {
+      await sb.from("curtidas").delete().eq("post_id", postId).eq("user_id", meuPerfil.id);
+    } else {
+      await sb.from("curtidas").insert({ post_id: postId, user_id: meuPerfil.id });
+    }
+    await carregarFeed();
+  }
+
+  async function carregarRanking() {
+    var res = await sb.from("ranking").select("*").order("km_total", { ascending: false }).limit(20);
+    var lista = res.data || [];
+    var minhaPosicao = lista.findIndex(function (r) { return r.user_id === meuPerfil.id; });
+    var meuKm = minhaPosicao >= 0 ? Number(lista[minhaPosicao].km_total) : 0;
+    var pct = Math.min(100, (meuKm / META_KM) * 100);
+    document.getElementById("ranking-voce-km").textContent = meuKm.toFixed(1);
+    document.getElementById("ranking-voce-bar").style.width = pct + "%";
+  }
+
+  async function postarTreino() {
+    var distEl = document.getElementById("distanceInput");
+    var pesoEl = document.getElementById("weightInput");
+    var dist = parseFloat(distEl.value);
+    var peso = parseFloat(pesoEl.value);
+    var feedback = document.getElementById("dash-feedback");
+    if (!dist || dist <= 0) {
+      feedback.textContent = "Informe a distância percorrida hoje.";
+      return;
+    }
+    var regRes = await sb.from("registros").insert({ user_id: meuPerfil.id, distancia_km: dist, peso_kg: (peso && peso > 0) ? peso : null }).select().single();
+    if (regRes.error) { feedback.textContent = "Erro ao salvar: " + regRes.error.message; return; }
+
+    await sb.from("posts").insert({ user_id: meuPerfil.id, registro_id: regRes.data.id, distancia_km: dist, legenda: "Treino registrado no app.", tag: "NOVO TREINO" });
+
+    if (peso && peso > 0) {
+      await sb.from("profiles").update({ peso_atual: peso }).eq("id", meuPerfil.id);
+      meuPerfil.peso_atual = peso;
+    }
+
+    await carregarTudo();
+    feedback.textContent = "Treino postado no mural!";
+    distEl.value = ""; pesoEl.value = "";
+    setTimeout(function () { feedback.textContent = ""; }, 2500);
+  }
+
+  var viewIds = ["lancamento", "desafio", "perfil", "ranking", "mural"];
+  function mostrarView(nome) {
+    if (viewIds.indexOf(nome) === -1) nome = "lancamento";
+    if (nome !== "lancamento" && !meuPerfil) nome = "lancamento";
+    document.getElementById("app-shell").classList.toggle("hidden", nome === "lancamento");
+    document.getElementById("view-lancamento").classList.toggle("active", nome === "lancamento");
+    viewIds.slice(1).forEach(function (v) {
+      var el = document.getElementById("view-" + v);
+      if (el) el.classList.toggle("active", v === nome);
+    });
+    document.querySelectorAll(".nav-link").forEach(function (a) {
+      a.classList.toggle("active-tab", a.getAttribute("data-view") === nome);
+    });
+    window.scrollTo(0, 0);
+  }
+  function rotear() {
+    var hash = window.location.hash.replace("#", "") || "lancamento";
+    mostrarView(hash);
+  }
+  window.addEventListener("hashchange", rotear);
+
+  document.addEventListener("DOMContentLoaded", async function () {
+    atualizarTextoAuth();
+    var sessRes = await sb.auth.getSession();
+    if (sessRes.data.session) {
+      await entrarNoApp();
+    } else {
+      rotear();
+    }
+  });
+</script>
+</body>
+</html>
